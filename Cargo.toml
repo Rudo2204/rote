@@ -9,3 +9,15 @@ description = "rote"
 
 [dependencies]
 imageproc = "0.22.0"
+image = "0.23"
+glob = "0.3.0"
+log = "0.4"
+fern = { version = "0.6", features = ["colored"] }
+anyhow = "1.0"
+chrono = "0.4.19"
+fs2 = "0.4.3"
+shellexpand = "2.1.0"
+clap = "2.33.3"
+toml = "0.5.8"
+serde = {version = "1.0", features= ["serde_derive"]}
+thiserror = "1.0"
