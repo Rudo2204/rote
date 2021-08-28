@@ -1,10 +1,10 @@
 use glob::glob;
 use log::{debug, info, trace};
-use serde::Serialize;
 
 const MAGIC_THRESHOLD_MEAN_NUMBER: u32 = 750;
 
 use crate::librote::error;
+use crate::librote::OcrPlan;
 
 enum PagePropertise {
     Image,
@@ -12,19 +12,7 @@ enum PagePropertise {
     EmptyPage,
 }
 
-#[derive(Serialize)]
-struct OcrPlan {
-    plan: Plan,
-}
-
-#[derive(Serialize)]
-struct Plan {
-    empty_page: Vec<String>,
-    image_page: Vec<String>,
-    ignore_page: Vec<String>,
-}
-
-pub fn planning(directory_input: &str) -> Result<String, error::Error> {
+pub fn plan(directory_input: &str) -> Result<String, error::Error> {
     let mut empty_page = Vec::new();
     let mut image_page = Vec::new();
 
@@ -55,14 +43,8 @@ pub fn planning(directory_input: &str) -> Result<String, error::Error> {
             Err(_e) => (),
         }
     }
-    let plan = Plan {
-        empty_page,
-        image_page,
-        ignore_page: Vec::new(),
-    };
 
-    let ocr_plan = OcrPlan { plan };
-
+    let ocr_plan = OcrPlan::new(empty_page, image_page, Vec::new());
     let toml = toml::to_string(&ocr_plan).unwrap();
     Ok(toml)
 }
