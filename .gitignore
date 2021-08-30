@@ -1,2 +1,6 @@
 /target
 /ignore
+*.pdf
+*.txt
+*.json
+ocr_plan.toml
