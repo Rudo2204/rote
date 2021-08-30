@@ -9,7 +9,7 @@ use std::io::{stdout, Write};
 use std::path::PathBuf;
 
 mod librote;
-use librote::plan;
+use librote::{gdrive, pdf, plan};
 
 pub const PROGRAM_NAME: &str = "rote";
 
@@ -88,7 +88,8 @@ fn setup_logging(verbosity: u64, chain: bool, log_path: Option<&str>) -> Result<
     Ok(log_path)
 }
 
-fn main() -> Result<()> {
+#[tokio::main(flavor = "current_thread")]
+async fn main() -> Result<()> {
     let matches = App::new(PROGRAM_NAME)
         .setting(AppSettings::DisableHelpSubcommand)
         .version(crate_version!())
@@ -137,7 +138,8 @@ fn main() -> Result<()> {
     debug!("-----Logger is initialized. Starting main program!-----");
 
     let input = matches.value_of("input").unwrap();
-    let ocr_plan = plan::planning(&input).expect("Could not generate a plan");
+
+    let ocr_plan = plan::plan(&input).expect("Could not generate a plan");
     let mut ocr_plan_file = OpenOptions::new()
         .write(true)
         .create(true)
@@ -146,6 +148,10 @@ fn main() -> Result<()> {
     write!(ocr_plan_file, "{}", ocr_plan)?;
     debug!("OCR plan written to `ocr_plan.toml`");
     println!("`ocr_plan.toml` file created. Now edit this file to proceed further");
+
+    let num_chunk = pdf::gen_pdf(&input)?;
+    let parent_id = "11qCubuAqEWvG0pu63_wHFkUWHhR7itAz";
+    gdrive::upload_pdf("rote_client_secret.json", parent_id, num_chunk).await?;
 
     debug!("-----Everything is finished!-----");
     if lock {
