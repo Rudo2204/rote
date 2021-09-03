@@ -1,7 +1,9 @@
+#![allow(dead_code)]
 pub mod error;
 pub mod gdrive;
 pub mod pdf;
 pub mod plan;
+pub mod process;
 
 use serde::{Deserialize, Serialize};
 
