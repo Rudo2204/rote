@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+pub mod epub_gen;
 pub mod error;
 pub mod gdrive;
 pub mod pdf;
