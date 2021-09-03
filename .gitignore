@@ -5,3 +5,5 @@
 *.json
 ocr_plan.toml
 *.html
+*.log
+*.xhtml
