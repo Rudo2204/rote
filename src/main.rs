@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use anyhow::Result;
 use chrono::{Local, Utc};
 use clap::{crate_authors, crate_description, crate_version, App, AppSettings, Arg};
@@ -5,7 +6,7 @@ use fern::colors::{Color, ColoredLevelConfig};
 use fs2::FileExt;
 use log::{debug, info, LevelFilter};
 use std::fs::OpenOptions;
-use std::io::{stdout, Write};
+use std::io::stdout;
 use std::path::PathBuf;
 
 mod librote;
