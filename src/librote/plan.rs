@@ -25,7 +25,6 @@ pub fn plan(
                 let image = image::open(&path)?.to_luma8();
                 let hist = imageproc::stats::histogram(&image);
                 let mut channel = hist.channels[0];
-                //debug!("{:?}", channel);
                 channel.sort();
                 let mean = channel[128];
                 debug!("Processing: {:?}, mean = {}", &path.display(), mean);
