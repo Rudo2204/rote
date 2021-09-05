@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use glob::glob;
 use log::{debug, info, trace};
 

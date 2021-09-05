@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use log::{debug, info};
 use regex::Regex;
 use scraper::{Html, Selector};

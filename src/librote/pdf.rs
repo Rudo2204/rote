@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use filesize::PathExt;
 use genpdf::{elements, fonts};
 use glob::glob;

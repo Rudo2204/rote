@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use google_drive3::api::{DriveHub, File, Scope};
 use hyper_rustls::HttpsConnector;
 use log::{debug, info};
