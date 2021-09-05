@@ -6,7 +6,6 @@ use clap::{
 };
 use fern::colors::{Color, ColoredLevelConfig};
 use fs2::FileExt;
-//use lazy_static::lazy_static;
 use log::{debug, LevelFilter};
 use std::fs::OpenOptions;
 use std::io::{stdout, Write};
