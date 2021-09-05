@@ -6,7 +6,7 @@ use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::process::Command;
 
-pub fn parse_ocr_html(num_chunk: u8) {
+pub fn parse_ocr_html(num_chunk: u8, font_size_threadhold: u8) {
     let font_size_regex = Regex::new("font-size:(\\d+)pt").unwrap();
     for i in 1..=num_chunk {
         let html = fs::read_to_string(format!("tidy_{:02}.html", i)).unwrap();
@@ -38,7 +38,7 @@ pub fn parse_ocr_html(num_chunk: u8) {
 
         let mut final_text = String::new();
         for (index, font_size) in font_size_vec.into_iter().enumerate() {
-            if font_size > 10 {
+            if font_size > font_size_threadhold {
                 let text = &proc_text_vec[index + 1];
                 if text.contains("PAGE") {
                     final_text.push_str("-----");

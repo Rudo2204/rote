@@ -148,7 +148,13 @@ async fn main() -> Result<()> {
             let num_chunk = pdf::gen_pdf(input)?;
             gdrive::upload_pdf("rote_client_secret.json", parent_id, num_chunk).await?;
             process::tidy(num_chunk);
-            process::parse_ocr_html(num_chunk);
+        }
+        ("process", Some(process_matches)) => {
+            let num_chunk =
+                value_t!(process_matches, "input", u8).expect("Could not parse value of `input`");
+            let font_size_threadhold =
+                value_t!(process_matches, "font-size-threadhold", u8).unwrap_or(10);
+            process::parse_ocr_html(num_chunk, font_size_threadhold);
         }
         ("epub", Some(epub_matches)) => {
             if epub_matches.is_present("raw") {
@@ -220,7 +226,7 @@ fn cli_interface() -> ArgMatches<'static> {
         )
         .subcommand(
             App::new("ocr")
-                .about("Start the OCR process and output raw text for further processing")
+                .about("Start creating pdf files, OCR them and output raw html result")
                 .arg(
                     Arg::with_name("input")
                         .help("Input directory")
@@ -234,6 +240,23 @@ fn cli_interface() -> ArgMatches<'static> {
                         .index(2)
                         .takes_value(true)
                         .required(true),
+                ),
+        )
+        .subcommand(
+            App::new("process")
+                .about("Process and output raw text from raw html for further editing")
+                .arg(
+                    Arg::with_name("input")
+                        .help("Input number of chunk")
+                        .index(1)
+                        .takes_value(true)
+                        .required(true),
+                )
+                .arg(
+                    Arg::with_name("font-size-threadhold")
+                        .help("Font size threadhold, default 10")
+                        .short("f")
+                        .long("font-size-threadhold"),
                 ),
         )
         .subcommand(
