@@ -1,18 +1,23 @@
 #![allow(dead_code)]
 use anyhow::Result;
 use chrono::{Local, Utc};
-use clap::{crate_authors, crate_description, crate_version, App, AppSettings, Arg};
+use clap::{
+    crate_authors, crate_description, crate_version, value_t, App, AppSettings, Arg, ArgMatches,
+};
 use fern::colors::{Color, ColoredLevelConfig};
 use fs2::FileExt;
-use log::{debug, info, LevelFilter};
+//use lazy_static::lazy_static;
+use log::{debug, LevelFilter};
 use std::fs::OpenOptions;
-use std::io::stdout;
+use std::io::{stdout, Write};
 use std::path::PathBuf;
+use std::unreachable;
 
 mod librote;
-use librote::{gdrive, pdf, plan};
+use librote::{epub_gen, gdrive, pdf, plan, process};
 
 pub const PROGRAM_NAME: &str = "rote";
+const MAGIC_THRESHOLD_MEAN_NUMBER: u32 = 750;
 
 fn setup_logging(verbosity: u64, chain: bool, log_path: Option<&str>) -> Result<Option<&str>> {
     let colors_line = ColoredLevelConfig::new()
@@ -91,33 +96,7 @@ fn setup_logging(verbosity: u64, chain: bool, log_path: Option<&str>) -> Result<
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
-    let matches = App::new(PROGRAM_NAME)
-        .setting(AppSettings::DisableHelpSubcommand)
-        .version(crate_version!())
-        .author(crate_authors!())
-        .about(crate_description!())
-        .arg(
-            Arg::with_name("input")
-                .help("Input directory")
-                .index(1)
-                .takes_value(true)
-                .required(true),
-        )
-        .arg(
-            Arg::with_name("log")
-                .long("log")
-                .takes_value(true)
-                .help("Also log output to file (for debugging)"),
-        )
-        .arg(
-            Arg::with_name("verbose")
-                .short("v")
-                .long("verbose")
-                .multiple(true)
-                .help("Sets the level of debug information verbosity"),
-        )
-        .get_matches();
-
+    let matches = cli_interface();
     let verbosity: u64 = matches.occurrences_of("verbose");
 
     let lock = matches.is_present("log");
@@ -138,21 +117,51 @@ async fn main() -> Result<()> {
 
     debug!("-----Logger is initialized. Starting main program!-----");
 
-    let input = matches.value_of("input").unwrap();
+    match matches.subcommand() {
+        ("plan", Some(plan_matches)) => {
+            let input = plan_matches.value_of("input").unwrap();
+            let image_threadhold = value_t!(plan_matches, "image-threadhold", u32)
+                .unwrap_or(MAGIC_THRESHOLD_MEAN_NUMBER);
+            let empty_page_threadhold =
+                value_t!(plan_matches, "empty-threadhold", u32).unwrap_or(0);
 
-    let ocr_plan = plan::plan(&input).expect("Could not generate a plan");
-    let mut ocr_plan_file = OpenOptions::new()
-        .write(true)
-        .create(true)
-        .open("ocr_plan.toml")
-        .unwrap();
-    write!(ocr_plan_file, "{}", ocr_plan)?;
-    debug!("OCR plan written to `ocr_plan.toml`");
-    println!("`ocr_plan.toml` file created. Now edit this file to proceed further");
+            debug!(
+                "image_threadhold = {}, empty_threadhold = {}",
+                image_threadhold, empty_page_threadhold
+            );
 
-    let num_chunk = pdf::gen_pdf(&input)?;
-    let parent_id = "11qCubuAqEWvG0pu63_wHFkUWHhR7itAz";
-    gdrive::upload_pdf("rote_client_secret.json", parent_id, num_chunk).await?;
+            let ocr_plan = plan::plan(input, image_threadhold, empty_page_threadhold)
+                .expect("Could not generate a plan");
+
+            let mut ocr_plan_file = OpenOptions::new()
+                .write(true)
+                .create(true)
+                .open("ocr_plan.toml")
+                .unwrap();
+            write!(ocr_plan_file, "{}", ocr_plan)?;
+            debug!("OCR plan written to `ocr_plan.toml`");
+            println!("`ocr_plan.toml` file created. Now edit this file to proceed further");
+        }
+        ("ocr", Some(ocr_matches)) => {
+            let input = ocr_matches.value_of("input").unwrap();
+            let parent_id = ocr_matches.value_of("id").unwrap();
+            let num_chunk = pdf::gen_pdf(input)?;
+            gdrive::upload_pdf("rote_client_secret.json", parent_id, num_chunk).await?;
+            process::tidy(num_chunk);
+            process::parse_ocr_html(num_chunk);
+        }
+        ("epub", Some(epub_matches)) => {
+            if epub_matches.is_present("raw") {
+                let title = epub_matches.value_of("input").unwrap();
+                epub_gen::gen_raw_epub(title);
+            } else if epub_matches.is_present("output") {
+                unreachable!();
+            } else {
+                unreachable!();
+            }
+        }
+        _ => unreachable!(),
+    }
 
     debug!("-----Everything is finished!-----");
     if lock {
@@ -163,4 +172,93 @@ async fn main() -> Result<()> {
         file.unlock()?;
     }
     Ok(())
+}
+
+fn cli_interface() -> ArgMatches<'static> {
+    App::new(PROGRAM_NAME)
+        .setting(AppSettings::DisableHelpSubcommand)
+        .version(crate_version!())
+        .author(crate_authors!())
+        .about(crate_description!())
+        .arg(
+            Arg::with_name("log")
+                .long("log")
+                .takes_value(true)
+                .help("Also log output to file (for debugging)"),
+        )
+        .arg(
+            Arg::with_name("verbose")
+                .short("v")
+                .long("verbose")
+                .multiple(true)
+                .help("Sets the level of debug information verbosity"),
+        )
+        .subcommand(
+            App::new("plan")
+                .about("Create a ocr plan")
+                .arg(
+                    Arg::with_name("input")
+                        .help("Input directory")
+                        .index(1)
+                        .takes_value(true)
+                        .required(true),
+                )
+                .arg(
+                    Arg::with_name("image-threadhold")
+                        .help("Input threadhold number for image")
+                        .short("i")
+                        .long("image-threadhold")
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("empty-threadhold")
+                        .help("Input threadhold number for empty page")
+                        .short("e")
+                        .long("empty-threadhold")
+                        .takes_value(true),
+                ),
+        )
+        .subcommand(
+            App::new("ocr")
+                .about("Start the OCR process and output raw text for further processing")
+                .arg(
+                    Arg::with_name("input")
+                        .help("Input directory")
+                        .index(1)
+                        .takes_value(true)
+                        .required(true),
+                )
+                .arg(
+                    Arg::with_name("id")
+                        .help("Input parent id")
+                        .index(2)
+                        .takes_value(true)
+                        .required(true),
+                ),
+        )
+        .subcommand(
+            App::new("epub")
+                .about("Generate raw epub components or the epub itself")
+                .arg(
+                    Arg::with_name("input")
+                        .help("Input title")
+                        .index(1)
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::with_name("raw")
+                        .short("r")
+                        .long("raw")
+                        .conflicts_with("output")
+                        .help("Generate raw components for epub file"),
+                )
+                .arg(
+                    Arg::with_name("output")
+                        .short("output")
+                        .long("raw")
+                        .conflicts_with("output")
+                        .help("Generate raw components for epub file"),
+                ),
+        )
+        .get_matches()
 }
