@@ -37,8 +37,7 @@ pub fn gen_raw_epub(title: &str) {
     let question_mark = Regex::new(r#"\?"#).unwrap();
     let left_parenthesis = Regex::new(r#"\("#).unwrap();
     let right_parenthesis = Regex::new(r#"\)"#).unwrap();
-    let question_mark = Regex::new(r#"\?"#).unwrap();
-    let start_with_bracket = Regex::new(r#"^「"#).unwrap();
+    let start_with_bracket = Regex::new(r#"^「|（|＜|〔|｛|｟|〈|《|【|〖|〘|〚"#).unwrap();
 
     for line in raw_text.lines() {
         if line.contains("----------") {
