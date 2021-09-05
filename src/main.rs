@@ -6,7 +6,7 @@ use clap::{
 };
 use fern::colors::{Color, ColoredLevelConfig};
 use fs2::FileExt;
-use log::{debug, LevelFilter};
+use log::{debug, info, LevelFilter};
 use std::fs::OpenOptions;
 use std::io::{stdout, Write};
 use std::path::PathBuf;
@@ -156,14 +156,11 @@ async fn main() -> Result<()> {
             process::parse_ocr_html(num_chunk, font_size_threadhold);
         }
         ("epub", Some(epub_matches)) => {
-            if epub_matches.is_present("raw") {
-                let title = epub_matches.value_of("input").unwrap();
-                epub_gen::gen_raw_epub(title);
-            } else if epub_matches.is_present("output") {
-                unreachable!();
-            } else {
-                unreachable!();
-            }
+            let plan_path = epub_matches.value_of("plan").unwrap();
+            let image_path = epub_matches.value_of("input").unwrap();
+            let output_path = epub_matches.value_of("output").unwrap();
+            epub_gen::gen_epub(plan_path, image_path, output_path);
+            info!("Finished generating epub file!");
         }
         _ => unreachable!(),
     }
@@ -260,26 +257,27 @@ fn cli_interface() -> ArgMatches<'static> {
         )
         .subcommand(
             App::new("epub")
-                .about("Generate raw epub components or the epub itself")
+                .about("Generate epub")
                 .arg(
-                    Arg::with_name("input")
-                        .help("Input title")
+                    Arg::with_name("plan")
+                        .help("Input plan file")
                         .index(1)
+                        .required(true)
                         .takes_value(true),
                 )
                 .arg(
-                    Arg::with_name("raw")
-                        .short("r")
-                        .long("raw")
-                        .conflicts_with("output")
-                        .help("Generate raw components for epub file"),
+                    Arg::with_name("input")
+                        .help("Input image path")
+                        .index(2)
+                        .required(true)
+                        .takes_value(true),
                 )
                 .arg(
                     Arg::with_name("output")
-                        .short("output")
-                        .long("raw")
-                        .conflicts_with("output")
-                        .help("Generate raw components for epub file"),
+                        .help("Output epub file name")
+                        .index(3)
+                        .required(true)
+                        .takes_value(true),
                 ),
         )
         .get_matches()
