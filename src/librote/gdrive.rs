@@ -12,13 +12,14 @@ use crate::librote::error;
 
 pub async fn upload_pdf(
     client_secret_file: &'static str,
-    parent_id: &'static str,
+    pid: &str,
     num_chunk: u8,
 ) -> Result<(), error::Error> {
     let items: Vec<u8> = (1..=num_chunk).collect();
     let tasks: Vec<_> = items
         .into_iter()
         .map(|i| {
+            let parent_id = pid.to_string();
             tokio::spawn(async move {
                 let secret = read_application_secret(client_secret_file)
                     .await
@@ -38,7 +39,7 @@ pub async fn upload_pdf(
                 info!("Uploading `chunk_{:02}.pdf`", i);
                 let mut create_req = File::default();
                 create_req.name = Some(format!("gd_chunk_{:02}", i));
-                create_req.parents = Some(vec![parent_id.to_string()]);
+                create_req.parents = Some(vec![parent_id.clone()]);
                 let create_result = hub
                     .files()
                     .create(create_req)
@@ -64,7 +65,7 @@ pub async fn upload_pdf(
                     .expect("pdf file_id does not exist in pdf_file_resp");
                 let mut copy_req = File::default();
                 copy_req.name = Some(format!("ocr_chunk_{:02}", i));
-                copy_req.parents = Some(vec![parent_id.to_string()]);
+                copy_req.parents = Some(vec![parent_id.clone()]);
                 copy_req.mime_type = Some(String::from("application/vnd.google-apps.document"));
                 let copy_result = hub
                     .files()
@@ -85,7 +86,7 @@ pub async fn upload_pdf(
                     .id
                     .expect("gdocs ocr file_id does not exist in ocr_resp");
                 let mut export_req = File::default();
-                export_req.parents = Some(vec![parent_id.to_string()]);
+                export_req.parents = Some(vec![parent_id]);
                 info!("Finished downloading OCR result of `chunk_{:02}.pdf`", i);
 
                 let export_result = hub
