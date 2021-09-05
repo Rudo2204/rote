@@ -2,8 +2,6 @@
 use glob::glob;
 use log::{debug, info, trace};
 
-const MAGIC_THRESHOLD_MEAN_NUMBER: u32 = 750;
-
 use crate::librote::error;
 use crate::librote::OcrPlan;
 
@@ -13,7 +11,11 @@ enum PagePropertise {
     EmptyPage,
 }
 
-pub fn plan(directory_input: &str) -> Result<String, error::Error> {
+pub fn plan(
+    directory_input: &str,
+    image_threadhold: u32,
+    empty_page_threadhold: u32,
+) -> Result<String, error::Error> {
     let mut empty_page = Vec::new();
     let mut image_page = Vec::new();
 
@@ -28,11 +30,11 @@ pub fn plan(directory_input: &str) -> Result<String, error::Error> {
                 let mean = channel[128];
                 debug!("Processing: {:?}, mean = {}", &path.display(), mean);
 
-                let _page_propertise = if mean == 0 {
+                let _page_propertise = if mean <= empty_page_threadhold {
                     info!("{:?} is likely an empty page", &path.display());
                     empty_page.push(String::from(path.to_str().unwrap()));
                     PagePropertise::EmptyPage
-                } else if mean > MAGIC_THRESHOLD_MEAN_NUMBER {
+                } else if mean > image_threadhold {
                     info!("{:?} is likely an image", &path.display());
                     image_page.push(String::from(path.to_str().unwrap()));
                     PagePropertise::Image
