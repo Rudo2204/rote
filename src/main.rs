@@ -89,7 +89,7 @@ fn setup_logging(verbosity: u64, chain: bool, log_path: Option<&str>) -> Result<
     Ok(log_path)
 }
 
-#[tokio::main]
+#[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<()> {
     let matches = App::new(PROGRAM_NAME)
         .setting(AppSettings::DisableHelpSubcommand)
