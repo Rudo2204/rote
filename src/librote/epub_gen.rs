@@ -364,12 +364,14 @@ fn japanese_ize_raw(unprocessed_raw: &str) -> String {
     let exclamation_mark = Regex::new(r#"!"#).unwrap();
     let left_parenthesis = Regex::new(r#"\("#).unwrap();
     let right_parenthesis = Regex::new(r#"\)"#).unwrap();
+    let tilde = Regex::new(r#"~"#).unwrap();
 
     raw = three_dot.replace_all(&raw, "…").to_string();
     raw = question_mark.replace_all(&raw, "？").to_string();
     raw = left_parenthesis.replace_all(&raw, "（").to_string();
     raw = right_parenthesis.replace_all(&raw, "）").to_string();
     raw = right_parenthesis.replace_all(&raw, "！").to_string();
+    raw = tilde.replace_all(&raw, "〜").to_string();
 
     raw
 }
