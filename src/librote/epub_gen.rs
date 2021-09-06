@@ -172,6 +172,9 @@ pub fn gen_epub(epub_plan_path: &str, image_path: &str, output_epub_path: &str) 
                             actions.push((Action::InsertColophon, custom_command[1].to_string()));
                             debug!("Added InsertColophon action");
                         }
+                        "toc-chapter" => {
+                            continue;
+                        }
                         _ => unimplemented!("Unimplemented custom command"),
                     }
                 }
@@ -272,7 +275,7 @@ pub fn gen_epub(epub_plan_path: &str, image_path: &str, output_epub_path: &str) 
                 )
                 .unwrap();
                 info!(
-                    "Inserted preface image `{}` with its preface number `{:03}`",
+                    "Inserted preface image `{}` with preface number `{:03}`",
                     action_content, current_preface_image_number
                 );
                 current_preface_image_number += 1;
@@ -338,7 +341,7 @@ pub fn gen_epub(epub_plan_path: &str, image_path: &str, output_epub_path: &str) 
                 )
                 .unwrap();
                 info!(
-                    "Inserted image `{}` with its paragraph number `{:03}`",
+                    "Inserted image `{}` with paragraph number `{:03}`",
                     action_content, current_paragraph_number,
                 );
                 current_paragraph_number += 1;
@@ -358,6 +361,7 @@ fn japanese_ize_raw(unprocessed_raw: &str) -> String {
 
     let three_dot = Regex::new(r#"\.\.\."#).unwrap();
     let question_mark = Regex::new(r#"\?"#).unwrap();
+    let exclamation_mark = Regex::new(r#"!"#).unwrap();
     let left_parenthesis = Regex::new(r#"\("#).unwrap();
     let right_parenthesis = Regex::new(r#"\)"#).unwrap();
 
@@ -365,6 +369,8 @@ fn japanese_ize_raw(unprocessed_raw: &str) -> String {
     raw = question_mark.replace_all(&raw, "？").to_string();
     raw = left_parenthesis.replace_all(&raw, "（").to_string();
     raw = right_parenthesis.replace_all(&raw, "）").to_string();
+    raw = right_parenthesis.replace_all(&raw, "！").to_string();
+
     raw
 }
 
@@ -543,7 +549,7 @@ fn add_preface_image<'a, Z: Zip>(
 }
 
 fn generate_toc_xhtml(epub_plan: &EpubPlan, raw: &str) -> String {
-    let chapter_re = Regex::new(r#"#chapter,(.*)#"#).unwrap();
+    let chapter_re = Regex::new(r#"#toc-chapter,(.*)#"#).unwrap();
     let atogaki_re = Regex::new(r#"#atogaki,(.*)#"#).unwrap();
 
     let mut toc = format!(
@@ -572,12 +578,19 @@ fn generate_toc_xhtml(epub_plan: &EpubPlan, raw: &str) -> String {
 
     let mut current_chapter_number: u8 = 1;
     for caps in chapter_re.captures_iter(raw) {
-        toc.push_str(&format!(
-            r#"<p><a href="p-REPLACE_ME.xhtml#mokuji-{:04}">{}</a></p>"#,
-            current_chapter_number,
-            caps.get(1).unwrap().as_str()
-        ));
-        current_chapter_number += 1;
+        let chapter_name = caps.get(1).unwrap().as_str();
+        match chapter_name {
+            "phantom" => {
+                toc.push_str("<p><br/></p>\n");
+            }
+            _ => {
+                toc.push_str(&format!(
+                    r#"<p><a href="p-REPLACE_ME.xhtml#mokuji-{:04}">{}</a></p>"#,
+                    current_chapter_number, chapter_name,
+                ));
+                current_chapter_number += 1;
+            }
+        }
     }
 
     match atogaki_re.captures(raw) {
