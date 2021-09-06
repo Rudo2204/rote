@@ -78,7 +78,7 @@ pub fn gen_epub(epub_plan_path: &str, image_path: &str, output_epub_path: &str) 
                     debug!("Captured command `{}`", command);
                     let custom_command: Vec<&str> = command.split(",").collect();
                     debug!(
-                        "custom_command[0] = `{}`, custom_command[1] = `{}`",
+                        "command = `{}`, arg = `{}`",
                         custom_command[0], custom_command[1]
                     );
                     match custom_command[0] {
@@ -92,18 +92,24 @@ pub fn gen_epub(epub_plan_path: &str, image_path: &str, output_epub_path: &str) 
                                 .push((Action::InsertPrefaceImage, custom_command[1].to_string()));
                         }
                         "chapter" => {
-                            if !is_new_chapter && !current_chapter_text.is_empty() {
-                                is_new_chapter = true;
-                                debug!("Added InsertContent action");
-                                actions.push((Action::InsertContent, current_chapter_text.clone()));
-                            } else {
-                                debug!("Added InsertContentWithChapter action");
-                                actions.push((
-                                    Action::InsertContentWithChapter,
-                                    current_chapter_text.clone(),
-                                ));
+                            if !current_chapter_text.is_empty() {
+                                if is_new_chapter {
+                                    debug!("Added InsertContentWithChapter action");
+                                    actions.push((
+                                        Action::InsertContentWithChapter,
+                                        current_chapter_text.clone(),
+                                    ));
+                                } else {
+                                    is_new_chapter = true;
+                                    debug!("Added InsertContent action");
+                                    actions.push((
+                                        Action::InsertContent,
+                                        current_chapter_text.clone(),
+                                    ));
+                                }
+                                current_chapter_text = String::new();
                             }
-                            current_chapter_text = String::new();
+
                             write!(
                                 current_chapter_text,
                                 r#"<p class="mfont font-1em30" id="mokuji-{:04}">{}</p>
@@ -115,12 +121,20 @@ pub fn gen_epub(epub_plan_path: &str, image_path: &str, output_epub_path: &str) 
                         }
                         "img" => {
                             if !current_chapter_text.is_empty() {
-                                is_new_chapter = false;
-                                debug!("Added InsertContentWithChapter action");
-                                actions.push((
-                                    Action::InsertContentWithChapter,
-                                    current_chapter_text.clone(),
-                                ));
+                                if is_new_chapter {
+                                    is_new_chapter = false;
+                                    debug!("Added InsertContentWithChapter action");
+                                    actions.push((
+                                        Action::InsertContentWithChapter,
+                                        current_chapter_text.clone(),
+                                    ));
+                                } else {
+                                    debug!("Added InsertContent action");
+                                    actions.push((
+                                        Action::InsertContent,
+                                        current_chapter_text.clone(),
+                                    ));
+                                }
                                 current_chapter_text = String::new();
                             }
                             actions.push((Action::InsertImage, custom_command[1].to_string()));
