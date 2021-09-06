@@ -370,7 +370,7 @@ fn japanese_ize_raw(unprocessed_raw: &str) -> String {
     raw = question_mark.replace_all(&raw, "？").to_string();
     raw = left_parenthesis.replace_all(&raw, "（").to_string();
     raw = right_parenthesis.replace_all(&raw, "）").to_string();
-    raw = right_parenthesis.replace_all(&raw, "！").to_string();
+    raw = exclamation_mark.replace_all(&raw, "！").to_string();
     raw = tilde.replace_all(&raw, "〜").to_string();
 
     raw
