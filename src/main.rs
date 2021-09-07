@@ -145,13 +145,13 @@ async fn main() -> Result<()> {
             let parent_id = ocr_matches.value_of("id").unwrap();
             let num_chunk = pdf::gen_pdf(input)?;
             gdrive::upload_pdf("rote_client_secret.json", parent_id, num_chunk).await?;
-            process::tidy(num_chunk);
         }
         ("process", Some(process_matches)) => {
             let num_chunk =
                 value_t!(process_matches, "input", u8).expect("Could not parse value of `input`");
             let font_size_threadhold =
                 value_t!(process_matches, "font-size-threadhold", u8).unwrap_or(10);
+            process::tidy(num_chunk);
             process::parse_ocr_html(num_chunk, font_size_threadhold);
         }
         ("epub", Some(epub_matches)) => {
