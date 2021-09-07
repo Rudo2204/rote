@@ -62,6 +62,9 @@ pub fn parse_ocr_html(num_chunk: u8, font_size_threadhold: u8) {
 pub fn tidy(num_chunk: u8) {
     for chunk_number in 1..=num_chunk {
         Command::new("tidy")
+            .arg("--show-warnings")
+            .arg("false")
+            .arg("-quiet")
             .arg("-output")
             .arg(format!("tidy_{:02}.html", chunk_number))
             .arg(format!("ocr_{:02}.html", chunk_number))
