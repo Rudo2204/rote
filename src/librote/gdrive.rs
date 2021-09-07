@@ -119,7 +119,7 @@ pub async fn upload_pdf(
     for task in tasks {
         task.await
             .expect("could not execute one of the upload/ocr task");
-        thread::sleep(time::Duration::from_millis(1000));
+        thread::sleep(time::Duration::from_millis(2000));
     }
     Ok(())
 }
