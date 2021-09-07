@@ -251,7 +251,8 @@ fn cli_interface() -> ArgMatches<'static> {
                     Arg::with_name("font-size-threadhold")
                         .help("Font size threadhold, default 10")
                         .short("f")
-                        .long("font-size-threadhold"),
+                        .long("font-size-threadhold")
+                        .takes_value(true),
                 ),
         )
         .subcommand(
