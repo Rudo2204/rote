@@ -56,20 +56,24 @@ pub fn gen_epub(epub_plan_path: &str, image_path: &str, output_epub_path: &str) 
 
     let dont_indent_re = Regex::new(r#"^「|（|＜|〔|｛|｟|〈|《|【|〖|〘|〚|─"#).unwrap();
     let custom_re = Regex::new(r#"#(.*)#"#).unwrap();
-    let toc_re = Regex::new(r#"#toc#"#).unwrap();
     let toc_replace_re = Regex::new(r#"REPLACE_ME"#).unwrap();
 
     let mut toc_content = generate_toc_xhtml(&epub_plan, &raw);
     let mut current_chapter_text = String::new();
     let mut current_mokuji: u16 = 1;
     let mut is_new_chapter = false;
+    let mut chapter_vec = Vec::new();
 
     let mut actions: Vec<(Action, String)> = Vec::new();
 
     for line in raw.lines() {
-        if toc_re.is_match(line) {
+        if line.contains("#toc#") {
             actions.push((Action::InsertToc, "".to_string()));
             debug!("Added InsertToc action");
+        } else if line.contains("#end-atogaki#") {
+            actions.push((Action::InsertAtogaki, current_chapter_text.clone()));
+            debug!("Added InsertAtogaki action");
+            current_chapter_text = String::new();
         } else {
             let try_capture = custom_re.captures(line);
             match try_capture {
@@ -112,11 +116,11 @@ pub fn gen_epub(epub_plan_path: &str, image_path: &str, output_epub_path: &str) 
 
                             write!(
                                 current_chapter_text,
-                                r#"<p class="mfont font-1em30" id="mokuji-{:04}">{}</p>
-                                <p><br/></p>"#,
+                                "<p class=\"mfont font-1em30\" id=\"mokuji-{:04}\">{}</p>\n<p><br/></p>\n",
                                 current_mokuji, custom_command[1]
                             )
                             .unwrap();
+                            chapter_vec.push(custom_command[1]);
                             current_mokuji += 1;
                         }
                         "img" => {
@@ -147,8 +151,7 @@ pub fn gen_epub(epub_plan_path: &str, image_path: &str, output_epub_path: &str) 
                             current_chapter_text = String::new();
                             write!(
                                 current_chapter_text,
-                                r#"<p class="mfont font-1em30" id="mokuji-{:04}">　{}</p>
-                                <p><br/></p>"#,
+                                "<p class=\"mfont font-1em30\" id=\"mokuji-{:04}\">　{}</p>\n<p><br/></p>\n",
                                 current_mokuji, custom_command[1]
                             )
                             .unwrap();
@@ -157,16 +160,10 @@ pub fn gen_epub(epub_plan_path: &str, image_path: &str, output_epub_path: &str) 
                         "fill" => {
                             write!(
                                 current_chapter_text,
-                                r#"<p><br/></p>
-                                <div class="align-end">
-                                <p>{}</p>
-                                </div>"#,
+                                "<p><br/></p>\n<div class=\"align-end\">\n<p>{}</p>\n</div>\n",
                                 custom_command[1]
                             )
                             .unwrap();
-                            actions.push((Action::InsertAtogaki, current_chapter_text.clone()));
-                            debug!("Added InsertAtogaki action");
-                            current_chapter_text = String::new();
                         }
                         "colophon" => {
                             actions.push((Action::InsertColophon, custom_command[1].to_string()));
@@ -182,7 +179,7 @@ pub fn gen_epub(epub_plan_path: &str, image_path: &str, output_epub_path: &str) 
                     if line.contains("----------") {
                         continue;
                     } else if line.is_empty() {
-                        write!(current_chapter_text, "<p><br/></p>").unwrap();
+                        write!(current_chapter_text, "<p><br/></p>\n").unwrap();
                     } else {
                         let dont_indent = dont_indent_re.is_match(line);
                         if dont_indent {
@@ -207,6 +204,8 @@ pub fn gen_epub(epub_plan_path: &str, image_path: &str, output_epub_path: &str) 
                 toc_content = toc_replace_re
                     .replace(&toc_content, format!("{:03}", tmp_toc_paragraph_number))
                     .to_string();
+
+                tmp_toc_paragraph_number += 1;
             }
             _ => (),
         }
@@ -246,12 +245,14 @@ pub fn gen_epub(epub_plan_path: &str, image_path: &str, output_epub_path: &str) 
                 "xhtml/p-cover.xhtml",
                 generate_cover_image_xhtml(&epub_plan).as_bytes(),
             )
+            .title("表紙")
             .reftype(ReferenceType::Cover),
         )
         .unwrap();
 
     let mut current_paragraph_number: u16 = 1;
     let mut current_preface_image_number = 1;
+    let mut current_chapter_vec_index = 0;
     let mut text_inserted = false;
 
     for (action, action_content) in &actions {
@@ -260,6 +261,7 @@ pub fn gen_epub(epub_plan_path: &str, image_path: &str, output_epub_path: &str) 
                 epub = epub
                     .add_content(
                         EpubContent::new("xhtml/p-toc.xhtml", toc_content.as_bytes())
+                            .title("目次")
                             .reftype(ReferenceType::Toc),
                     )
                     .expect("Could not add toc");
@@ -284,29 +286,57 @@ pub fn gen_epub(epub_plan_path: &str, image_path: &str, output_epub_path: &str) 
                 epub = add_title_page(epub, &epub_plan, image_path, action_content).unwrap();
                 info!("Inserted title page image `{}`", action_content);
             }
-            Action::InsertContent | Action::InsertContentWithChapter | Action::InsertAtogaki => {
-                let content_formatted = format!(
-                    r#"<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE html>
-<html
- xmlns="http://www.w3.org/1999/xhtml"
- xmlns:epub="http://www.idpf.org/2007/ops"
- xml:lang="{}"
- class="vrtl"
->
-<head>
-<meta charset="UTF-8"/>
-<title>{}</title>
-<link rel="stylesheet" type="text/css" href="../style/book-style.css"/>
-</head>
-<body class="p-honmon top-left-on">
-<p class="dummy"><img class="keep-space" src="../image/keep-space.jpg"/></p>
-<div class="main">
-{}</div>
-</body>
-</html>"#,
-                    epub_plan.lang, epub_plan.title, action_content
+            Action::InsertAtogaki => {
+                let content_formatted = generate_content_xhtml(&epub_plan, action_content);
+
+                epub.add_content(
+                    EpubContent::new(
+                        format!("xhtml/p-{:03}.xhtml", current_paragraph_number),
+                        content_formatted.as_bytes(),
+                    )
+                    .title("奥付")
+                    .reftype(ReferenceType::Afterword),
+                )
+                .unwrap();
+                info!(
+                    "Inserted atogaki content with paragraph number `{:03}`",
+                    current_paragraph_number
                 );
+                current_paragraph_number += 1;
+            }
+            Action::InsertContentWithChapter => {
+                let content_formatted = generate_content_xhtml(&epub_plan, action_content);
+
+                if text_inserted {
+                    epub.add_content(
+                        EpubContent::new(
+                            format!("xhtml/p-{:03}.xhtml", current_paragraph_number),
+                            content_formatted.as_bytes(),
+                        )
+                        .title(chapter_vec[current_chapter_vec_index]),
+                    )
+                    .unwrap();
+                } else {
+                    epub.add_content(
+                        EpubContent::new(
+                            format!("xhtml/p-{:03}.xhtml", current_paragraph_number),
+                            content_formatted.as_bytes(),
+                        )
+                        .title(chapter_vec[current_chapter_vec_index])
+                        .reftype(ReferenceType::Text),
+                    )
+                    .unwrap();
+                    text_inserted = true;
+                }
+                info!(
+                    "Inserted content with chapter, paragraph number `{:03}`",
+                    current_paragraph_number
+                );
+                current_chapter_vec_index += 1;
+                current_paragraph_number += 1;
+            }
+            Action::InsertContent => {
+                let content_formatted = generate_content_xhtml(&epub_plan, action_content);
 
                 if text_inserted {
                     epub.add_content(EpubContent::new(
@@ -354,6 +384,32 @@ pub fn gen_epub(epub_plan_path: &str, image_path: &str, output_epub_path: &str) 
     }
 
     epub.generate(epub_file).unwrap();
+}
+
+fn generate_content_xhtml(epub_plan: &EpubPlan, content: &str) -> String {
+    format!(
+        r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html
+ xmlns="http://www.w3.org/1999/xhtml"
+ xmlns:epub="http://www.idpf.org/2007/ops"
+ xml:lang="{}"
+ class="vrtl"
+>
+<head>
+<meta charset="UTF-8"/>
+<title>{}</title>
+<link rel="stylesheet" type="text/css" href="../style/book-style.css"/>
+</head>
+<body class="p-honmon top-left-on">
+<p class="dummy"><img class="keep-space" src="../image/keep-space.jpg"/></p>
+<div class="main">
+{}
+</div>
+</body>
+</html>"#,
+        epub_plan.lang, epub_plan.title, content
+    )
 }
 
 fn japanese_ize_raw(unprocessed_raw: &str) -> String {
@@ -574,7 +630,8 @@ fn generate_toc_xhtml(epub_plan: &EpubPlan, raw: &str) -> String {
 <div class="start-2em">
 <p>　<span class="mfont font-1em30">{}</span></p>
 <p><br/></p>
-<div class="font-1em10">"#,
+<div class="font-1em10">
+"#,
         epub_plan.lang, epub_plan.title, epub_plan.toc_name
     );
 
@@ -587,8 +644,9 @@ fn generate_toc_xhtml(epub_plan: &EpubPlan, raw: &str) -> String {
             }
             _ => {
                 toc.push_str(&format!(
-                    r#"<p><a href="p-REPLACE_ME.xhtml#mokuji-{:04}">{}</a></p>"#,
-                    current_chapter_number, chapter_name,
+                    "<p><a href=\"p-REPLACE_ME.xhtml#mokuji-{:04}\" class=\"mokuji-{:04}\">{}</a></p>\n",                                 current_chapter_number,
+                    current_chapter_number,
+                    chapter_name,
                 ));
                 current_chapter_number += 1;
             }
@@ -598,10 +656,8 @@ fn generate_toc_xhtml(epub_plan: &EpubPlan, raw: &str) -> String {
     match atogaki_re.captures(raw) {
         Some(caps) => {
             toc.push_str(&format!(
-                r#"<p><br/></p>
-<div class="h-indent-1em">
-<p>　<a href="p-REPLACE_ME#mokuji-{:04}">{}</a></p>
-</div>"#,
+                "<p><br/></p>\n<div class=\"h-indent-1em\">\n<p>　<a href=\"p-REPLACE_ME.xhtml#mokuji-{:04}\" class=\"mokuji-{:04}\">{}</a></p>\n</div>\n",
+                current_chapter_number,
                 current_chapter_number,
                 caps.get(1).unwrap().as_str()
             ));
