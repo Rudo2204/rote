@@ -31,4 +31,4 @@ yup-oauth2 = "5.1"
 tokio = { version = "1", features = ["rt", "macros", "time"] }
 scraper = "0.12"
 regex = "1.5.4"
-epub-builder = "0.4.8"
+epub-builder = { git = "https://github.com/Rudo2204/epub-builder.git", branch = "more-nav" }
