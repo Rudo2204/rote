@@ -54,7 +54,7 @@ pub fn gen_epub(epub_plan_path: &str, image_path: &str, output_epub_path: &str) 
     let unprocessed_raw = fs::read_to_string(&epub_plan.raw).expect("Could not read `raw`");
     let raw = japanese_ize_raw(&unprocessed_raw);
 
-    let dont_indent_re = Regex::new(r#"^『|「|（|＜|〔|｛|｟|〈|《|【|〖|〘|〚|─"#).unwrap();
+    let dont_indent_re = Regex::new(r#"^　|『|「|（|＜|〔|｛|｟|〈|《|【|〖|〘|〚|─"#).unwrap();
     let custom_re = Regex::new(r#"#(.*)#"#).unwrap();
     let toc_replace_re = Regex::new(r#"REPLACE_ME"#).unwrap();
 
@@ -172,7 +172,13 @@ pub fn gen_epub(epub_plan_path: &str, image_path: &str, output_epub_path: &str) 
                         "toc-chapter" => {
                             continue;
                         }
-                        _ => unimplemented!("Unimplemented custom command"),
+                        "no-indent" => {
+                            write!(current_chapter_text, "<p>{}</p>\n", custom_command[1]).unwrap();
+                        }
+                        _ => {
+                            log::error!("`{}` is an unimplemented command", custom_command[0]);
+                            unimplemented!("Unimplemented custom command");
+                        }
                     }
                 }
                 None => {
