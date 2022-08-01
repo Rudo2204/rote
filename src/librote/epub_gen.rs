@@ -649,7 +649,8 @@ fn generate_toc_xhtml(epub_plan: &EpubPlan, raw: &str) -> String {
             }
             _ => {
                 toc.push_str(&format!(
-                    "<p><a href=\"p-REPLACE_ME.xhtml#mokuji-{:04}\" class=\"mokuji-{:04}\">{}</a></p>\n",                                 current_chapter_number,
+                    "<p><a href=\"p-REPLACE_ME.xhtml#mokuji-{:04}\" class=\"mokuji-{:04}\">{}</a></p>\n",
+                    current_chapter_number,
                     current_chapter_number,
                     chapter_name,
                 ));
