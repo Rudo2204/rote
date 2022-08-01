@@ -383,7 +383,7 @@ pub fn gen_epub(epub_plan_path: &str, image_path: &str, output_epub_path: &str) 
                 current_paragraph_number += 1;
             }
             Action::InsertColophon => {
-                epub = add_colophone_image(epub, &epub_plan, image_path, action_content).unwrap();
+                epub = add_colophon_image(epub, &epub_plan, image_path, action_content).unwrap();
                 info!("Inserted colophon image `{}`", action_content);
             }
         }
@@ -561,7 +561,7 @@ fn add_normal_image<'a, Z: Zip>(
     Ok(epub)
 }
 
-fn add_colophone_image<'a, Z: Zip>(
+fn add_colophon_image<'a, Z: Zip>(
     epub: &'a mut EpubBuilder<Z>,
     epub_plan: &'a EpubPlan,
     img_path: &'a str,
@@ -575,7 +575,7 @@ fn add_colophone_image<'a, Z: Zip>(
         img.as_slice(),
         &epub_plan.image_mime_type,
     )
-    .expect("Could not add colophone image");
+    .expect("Could not add colophon image");
     epub.add_content(
         EpubContent::new(format!("xhtml/p-colophon.xhtml"), img_content.as_bytes())
             .reftype(ReferenceType::Colophon),
