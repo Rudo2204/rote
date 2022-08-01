@@ -28,6 +28,9 @@ enum Action {
     InsertImage,
     InsertAtogaki,
     InsertColophon,
+    InsertColophonText,
+    InsertCopyright,
+    InsertBibliography,
 }
 
 fn read_epub_plan(path: &str) -> EpubPlan {
@@ -70,6 +73,18 @@ pub fn gen_epub(epub_plan_path: &str, image_path: &str, output_epub_path: &str) 
         if line.contains("#toc#") {
             actions.push((Action::InsertToc, "".to_string()));
             debug!("Added InsertToc action");
+        } else if line.contains("#end-bibliography#") {
+            actions.push((Action::InsertBibliography, current_chapter_text.clone()));
+            debug!("Added InsertBibliography action");
+            current_chapter_text = String::new();
+        } else if line.contains("#end-copyright#") {
+            actions.push((Action::InsertCopyright, current_chapter_text.clone()));
+            debug!("Added InsertCopyright action");
+            current_chapter_text = String::new();
+        } else if line.contains("#end-colophon-text#") {
+            actions.push((Action::InsertColophonText, current_chapter_text.clone()));
+            debug!("Added InsertColophonText action");
+            current_chapter_text = String::new();
         } else if line.contains("#end-atogaki#") {
             actions.push((Action::InsertAtogaki, current_chapter_text.clone()));
             debug!("Added InsertAtogaki action");
@@ -156,6 +171,11 @@ pub fn gen_epub(epub_plan_path: &str, image_path: &str, output_epub_path: &str) 
                             )
                             .unwrap();
                             current_mokuji += 1;
+                        }
+                        "bibliography" => {
+                            actions.push((Action::InsertContent, current_chapter_text.clone()));
+                            debug!("Added InsertContent action");
+                            current_chapter_text = String::new();
                         }
                         "fill" => {
                             write!(
@@ -385,6 +405,84 @@ pub fn gen_epub(epub_plan_path: &str, image_path: &str, output_epub_path: &str) 
             Action::InsertColophon => {
                 epub = add_colophon_image(epub, &epub_plan, image_path, action_content).unwrap();
                 info!("Inserted colophon image `{}`", action_content);
+            }
+            Action::InsertColophonText => {
+                let content_formatted = generate_content_xhtml(&epub_plan, action_content);
+
+                if text_inserted {
+                    epub.add_content(EpubContent::new(
+                        format!("xhtml/p-{:03}.xhtml", current_paragraph_number),
+                        content_formatted.as_bytes(),
+                    ))
+                    .unwrap();
+                } else {
+                    epub.add_content(
+                        EpubContent::new(
+                            format!("xhtml/p-{:03}.xhtml", current_paragraph_number),
+                            content_formatted.as_bytes(),
+                        )
+                        .reftype(ReferenceType::Colophon),
+                    )
+                    .unwrap();
+                    text_inserted = true;
+                }
+                info!(
+                    "Inserted colophon (text) content with paragraph number `{:03}`",
+                    current_paragraph_number
+                );
+                current_paragraph_number += 1;
+            }
+            Action::InsertCopyright => {
+                let content_formatted = generate_content_xhtml(&epub_plan, action_content);
+
+                if text_inserted {
+                    epub.add_content(EpubContent::new(
+                        format!("xhtml/p-{:03}.xhtml", current_paragraph_number),
+                        content_formatted.as_bytes(),
+                    ))
+                    .unwrap();
+                } else {
+                    epub.add_content(
+                        EpubContent::new(
+                            format!("xhtml/p-{:03}.xhtml", current_paragraph_number),
+                            content_formatted.as_bytes(),
+                        )
+                        .reftype(ReferenceType::Copyright),
+                    )
+                    .unwrap();
+                    text_inserted = true;
+                }
+                info!(
+                    "Inserted copyright content with paragraph number `{:03}`",
+                    current_paragraph_number
+                );
+                current_paragraph_number += 1;
+            }
+            Action::InsertBibliography => {
+                let content_formatted = generate_content_xhtml(&epub_plan, action_content);
+
+                if text_inserted {
+                    epub.add_content(EpubContent::new(
+                        format!("xhtml/p-{:03}.xhtml", current_paragraph_number),
+                        content_formatted.as_bytes(),
+                    ))
+                    .unwrap();
+                } else {
+                    epub.add_content(
+                        EpubContent::new(
+                            format!("xhtml/p-{:03}.xhtml", current_paragraph_number),
+                            content_formatted.as_bytes(),
+                        )
+                        .reftype(ReferenceType::Bibliography),
+                    )
+                    .unwrap();
+                    text_inserted = true;
+                }
+                info!(
+                    "Inserted bibliography content with paragraph number `{:03}`",
+                    current_paragraph_number
+                );
+                current_paragraph_number += 1;
             }
         }
     }
