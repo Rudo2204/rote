@@ -1,8 +1,9 @@
 use anyhow::Result;
 use chrono::{Local, Utc};
-use clap::{
-    crate_authors, crate_description, crate_version, value_t, App, AppSettings, Arg, ArgMatches,
-};
+use clap::{crate_authors, crate_description, crate_version, value_t, Arg, ArgMatches, Command};
+//use clap::{
+//    crate_authors, crate_description, crate_version, value_t, App, AppSettings, Arg, ArgMatches,
+//};
 use fern::colors::{Color, ColoredLevelConfig};
 use fs2::FileExt;
 use log::{debug, info, LevelFilter};
@@ -116,7 +117,7 @@ async fn main() -> Result<()> {
     debug!("-----Logger is initialized. Starting main program!-----");
 
     match matches.subcommand() {
-        ("plan", Some(plan_matches)) => {
+        Some(("plan", plan_matches)) => {
             let input = plan_matches.value_of("input").unwrap();
             let image_threadhold = value_t!(plan_matches, "image-threadhold", u32)
                 .unwrap_or(MAGIC_THRESHOLD_MEAN_NUMBER);
@@ -140,13 +141,13 @@ async fn main() -> Result<()> {
             debug!("OCR plan written to `ocr_plan.toml`");
             println!("`ocr_plan.toml` file created. Now edit this file to proceed further");
         }
-        ("ocr", Some(ocr_matches)) => {
+        Some(("ocr", ocr_matches)) => {
             let input = ocr_matches.value_of("input").unwrap();
             let parent_id = ocr_matches.value_of("id").unwrap();
             let num_chunk = pdf::gen_pdf(input)?;
             gdrive::upload_pdf("rote_client_secret.json", parent_id, num_chunk).await?;
         }
-        ("process", Some(process_matches)) => {
+        Some(("process", process_matches)) => {
             let num_chunk =
                 value_t!(process_matches, "input", u8).expect("Could not parse value of `input`");
             let font_size_threadhold =
@@ -154,7 +155,7 @@ async fn main() -> Result<()> {
             process::tidy(num_chunk);
             process::parse_ocr_html(num_chunk, font_size_threadhold);
         }
-        ("epub", Some(epub_matches)) => {
+        Some(("epub", epub_matches)) => {
             let plan_path = epub_matches.value_of("plan").unwrap();
             let image_path = epub_matches.value_of("input").unwrap();
             let output_path = epub_matches.value_of("output").unwrap();
@@ -175,62 +176,62 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-fn cli_interface() -> ArgMatches<'static> {
-    App::new(PROGRAM_NAME)
-        .setting(AppSettings::DisableHelpSubcommand)
+fn cli_interface() -> ArgMatches {
+    Command::new(PROGRAM_NAME)
+        .disable_help_subcommand(true)
         .version(crate_version!())
         .author(crate_authors!())
         .about(crate_description!())
         .arg(
-            Arg::with_name("log")
+            Arg::new("log")
                 .long("log")
                 .takes_value(true)
                 .help("Also log output to file (for debugging)"),
         )
         .arg(
-            Arg::with_name("verbose")
-                .short("v")
+            Arg::new("verbose")
+                .short('v')
                 .long("verbose")
-                .multiple(true)
+                .multiple_occurrences(true)
                 .help("Sets the level of debug information verbosity"),
         )
         .subcommand(
-            App::new("plan")
+            Command::new("plan")
                 .about("Create a ocr plan")
                 .arg(
-                    Arg::with_name("input")
+                    Arg::new("input")
                         .help("Input directory")
                         .index(1)
                         .takes_value(true)
                         .required(true),
                 )
                 .arg(
-                    Arg::with_name("image-threadhold")
+                    Arg::new("image-threadhold")
                         .help("Input threadhold number for image")
-                        .short("i")
+                        .short('i')
                         .long("image-threadhold")
                         .takes_value(true),
                 )
                 .arg(
-                    Arg::with_name("empty-threadhold")
+                    Arg::new("empty-threadhold")
                         .help("Input threadhold number for empty page")
-                        .short("e")
+                        .short('e')
                         .long("empty-threadhold")
                         .takes_value(true),
                 ),
         )
         .subcommand(
-            App::new("ocr")
+            Command::new("ocr")
                 .about("Start creating pdf files, OCR them and output raw html result")
                 .arg(
-                    Arg::with_name("input")
+                    Arg::new("input")
                         .help("Input directory")
                         .index(1)
                         .takes_value(true)
                         .required(true),
                 )
                 .arg(
-                    Arg::with_name("id")
+                    Arg::new("id")
                         .help("Input parent id")
                         .index(2)
                         .takes_value(true)
@@ -238,42 +239,42 @@ fn cli_interface() -> ArgMatches<'static> {
                 ),
         )
         .subcommand(
-            App::new("process")
+            Command::new("process")
                 .about("Process and output raw text from raw html for further editing")
                 .arg(
-                    Arg::with_name("input")
+                    Arg::new("input")
                         .help("Input number of chunk")
                         .index(1)
                         .takes_value(true)
                         .required(true),
                 )
                 .arg(
-                    Arg::with_name("font-size-threadhold")
+                    Arg::new("font-size-threadhold")
                         .help("Font size threadhold, default 10")
-                        .short("f")
+                        .short('f')
                         .long("font-size-threadhold")
                         .takes_value(true),
                 ),
         )
         .subcommand(
-            App::new("epub")
+            Command::new("epub")
                 .about("Generate epub")
                 .arg(
-                    Arg::with_name("plan")
+                    Arg::new("plan")
                         .help("Input plan file")
                         .index(1)
                         .required(true)
                         .takes_value(true),
                 )
                 .arg(
-                    Arg::with_name("input")
+                    Arg::new("input")
                         .help("Input image path")
                         .index(2)
                         .required(true)
                         .takes_value(true),
                 )
                 .arg(
-                    Arg::with_name("output")
+                    Arg::new("output")
                         .help("Output epub file name")
                         .index(3)
                         .required(true)

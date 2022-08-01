@@ -1,5 +1,5 @@
 use google_drive3::api::{DriveHub, File, Scope};
-use hyper_rustls::HttpsConnector;
+use hyper_rustls::HttpsConnectorBuilder;
 use log::{debug, info};
 use std::fs;
 use std::io::Write;
@@ -32,7 +32,14 @@ pub async fn upload_pdf(
                 .await
                 .unwrap();
                 let hub = DriveHub::new(
-                    hyper::Client::builder().build(HttpsConnector::with_native_roots()),
+                    hyper::Client::builder().build(
+                        HttpsConnectorBuilder::new()
+                            .with_native_roots()
+                            .https_or_http()
+                            .enable_http1()
+                            .enable_http2()
+                            .build(),
+                    ),
                     auth,
                 );
                 info!("Uploading `chunk_{:02}.pdf`", i);
