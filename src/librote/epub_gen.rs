@@ -2,8 +2,10 @@ use epub_builder::{EpubBuilder, EpubContent, EpubVersion, ReferenceType, Zip, Zi
 use log::{debug, info};
 use regex::Regex;
 use serde::Deserialize;
+use std::ffi::OsStr;
 use std::fmt::Write;
 use std::fs::{self, OpenOptions};
+use std::path::Path;
 
 use crate::librote::error;
 
@@ -14,7 +16,6 @@ struct EpubPlan {
     lang: String,
     generator: String,
     toc_name: String,
-    image_mime_type: String,
     cover_image: String,
     raw: String,
 }
@@ -31,6 +32,18 @@ enum Action {
     InsertColophonText,
     InsertCopyright,
     InsertBibliography,
+    InsertGaiji,
+}
+
+fn get_image_mime_type(path: &str) -> &str {
+    let extension = Path::new(path).extension().and_then(OsStr::to_str).unwrap();
+    if extension == "png" {
+        "image/png"
+    } else if extension == "jpg" {
+        "image/jpeg"
+    } else {
+        panic!("Unknown image type")
+    }
 }
 
 fn read_epub_plan(path: &str) -> EpubPlan {
@@ -47,12 +60,12 @@ pub fn gen_epub(epub_plan_path: &str, image_path: &str, output_epub_path: &str) 
         .open(output_epub_path)
         .unwrap();
 
-    let image_mime_type = &epub_plan.image_mime_type;
     let book_style = fs::read_to_string("book-style.css").expect("Could not read `book-style.css`");
     let fit_style = fs::read_to_string("fit-style.css").expect("Could not read `fit-style.css`");
     let keep_space_img = fs::read("keep-space.jpg").expect("Could not read `keep-space.jpg");
-    let cover_image = fs::read(format!("{}/{}", image_path, &epub_plan.cover_image))
-        .expect("Could not read cover image");
+    let cover_image_path = format!("{}/{}", image_path, &epub_plan.cover_image);
+    let cover_image = fs::read(&cover_image_path).expect("Could not read cover image");
+    let cover_image_mime_type = get_image_mime_type(&cover_image_path);
 
     let unprocessed_raw = fs::read_to_string(&epub_plan.raw).expect("Could not read `raw`");
     let raw = japanese_ize_raw(&unprocessed_raw);
@@ -60,6 +73,7 @@ pub fn gen_epub(epub_plan_path: &str, image_path: &str, output_epub_path: &str) 
     let dont_indent_re = Regex::new(r#"^　|『|「|（|＜|〔|｛|｟|〈|《|【|〖|〘|〚|─"#).unwrap();
     let custom_re = Regex::new(r#"#(.*)#"#).unwrap();
     let toc_replace_re = Regex::new(r#"REPLACE_ME"#).unwrap();
+    let gaiji_replace_re = Regex::new(r#"#gaiji,(.*?)#"#).unwrap();
 
     let mut toc_content = generate_toc_xhtml(&epub_plan, &raw);
     let mut current_chapter_text = String::new();
@@ -73,6 +87,38 @@ pub fn gen_epub(epub_plan_path: &str, image_path: &str, output_epub_path: &str) 
         if line.contains("#toc#") {
             actions.push((Action::InsertToc, "".to_string()));
             debug!("Added InsertToc action");
+        } else if line.contains("#gaiji,") {
+            // add the image
+            let mut gaiji_pics = vec![];
+            for cap in gaiji_replace_re.captures_iter(&line) {
+                gaiji_pics.push(cap.get(1).unwrap().as_str())
+            }
+            for pic in gaiji_pics {
+                actions.push((Action::InsertGaiji, pic.to_string()));
+                debug!("Added InsertGaiji action");
+            }
+
+            // regex replace the text
+            let mut replaced_line: String = line.to_string();
+            while gaiji_replace_re.is_match(&replaced_line) {
+                replaced_line = gaiji_replace_re
+                    .replace(&replaced_line, |caps: &regex::Captures| {
+                        format!(
+                            "<img class=\"gaiji\" src=\"../image/{}\" alt=\"\" />",
+                            &caps[1]
+                        )
+                    })
+                    .to_string()
+            }
+
+            // write the line
+            let dont_indent = dont_indent_re.is_match(line);
+            if dont_indent {
+                write!(current_chapter_text, "<p>{}</p>\n", replaced_line).unwrap();
+            } else {
+                //intentionally use Japanese space
+                write!(current_chapter_text, "<p>　{}</p>\n", replaced_line).unwrap();
+            }
         } else if line.contains("#end-bibliography#") {
             actions.push((Action::InsertBibliography, current_chapter_text.clone()));
             debug!("Added InsertBibliography action");
@@ -110,9 +156,12 @@ pub fn gen_epub(epub_plan_path: &str, image_path: &str, output_epub_path: &str) 
                             actions
                                 .push((Action::InsertPrefaceImage, custom_command[1].to_string()));
                         }
+                        "gaiji" => {
+                            continue;
+                        }
                         "chapter" => {
                             if !current_chapter_text.is_empty() {
-                                if is_new_chapter {
+                                if is_new_chapter || chapter_vec.len() > 0 {
                                     debug!("Added InsertContentWithChapter action");
                                     actions.push((
                                         Action::InsertContentWithChapter,
@@ -173,8 +222,11 @@ pub fn gen_epub(epub_plan_path: &str, image_path: &str, output_epub_path: &str) 
                             current_mokuji += 1;
                         }
                         "bibliography" => {
-                            actions.push((Action::InsertContent, current_chapter_text.clone()));
-                            debug!("Added InsertContent action");
+                            debug!("Added InsertContentWithChapter action");
+                            actions.push((
+                                Action::InsertContentWithChapter,
+                                current_chapter_text.clone(),
+                            ));
                             current_chapter_text = String::new();
                         }
                         "fill" => {
@@ -226,7 +278,7 @@ pub fn gen_epub(epub_plan_path: &str, image_path: &str, output_epub_path: &str) 
             Action::InsertContent | Action::InsertImage => {
                 tmp_toc_paragraph_number += 1;
             }
-            Action::InsertContentWithChapter | Action::InsertAtogaki => {
+            Action::InsertCopyright | Action::InsertContentWithChapter | Action::InsertAtogaki => {
                 toc_content = toc_replace_re
                     .replace(&toc_content, format!("{:03}", tmp_toc_paragraph_number))
                     .to_string();
@@ -263,7 +315,7 @@ pub fn gen_epub(epub_plan_path: &str, image_path: &str, output_epub_path: &str) 
         .add_cover_image(
             "image/cover-image.jpg",
             cover_image.as_slice(),
-            image_mime_type,
+            cover_image_mime_type,
         )
         .unwrap()
         .add_content(
@@ -430,7 +482,6 @@ pub fn gen_epub(epub_plan_path: &str, image_path: &str, output_epub_path: &str) 
                     "Inserted colophon (text) content with paragraph number `{:03}`",
                     current_paragraph_number
                 );
-                current_paragraph_number += 1;
             }
             Action::InsertCopyright => {
                 let content_formatted = generate_content_xhtml(&epub_plan, action_content);
@@ -483,6 +534,13 @@ pub fn gen_epub(epub_plan_path: &str, image_path: &str, output_epub_path: &str) 
                     current_paragraph_number
                 );
                 current_paragraph_number += 1;
+            }
+            Action::InsertGaiji => {
+                epub = add_gaiji_image(epub, image_path, action_content).unwrap();
+                info!(
+                    "Inserted image `{}` to paragraph number `{:03}`",
+                    action_content, current_paragraph_number,
+                );
             }
         }
     }
@@ -620,12 +678,12 @@ fn add_title_page<'a, Z: Zip>(
     img_name: &'a str,
 ) -> Result<&'a mut EpubBuilder<Z>, error::Error> {
     let title_page_content = generate_preface_image_xhtml(epub_plan, img_name);
-    let title_page_img =
-        fs::read(format!("{}/{}", img_path, img_name)).expect("Could not read title page image");
+    let img_full_path = format!("{}/{}", img_path, img_name);
+    let title_page_img = fs::read(&img_full_path).expect("Could not read title page image");
     epub.add_resource(
         format!("image/{}", img_name),
         title_page_img.as_slice(),
-        &epub_plan.image_mime_type,
+        get_image_mime_type(&img_full_path),
     )
     .expect("Could not add image for title page");
     epub.add_content(
@@ -633,6 +691,22 @@ fn add_title_page<'a, Z: Zip>(
             .reftype(ReferenceType::TitlePage),
     )
     .expect("Could not add content for title page");
+    Ok(epub)
+}
+
+fn add_gaiji_image<'a, Z: Zip>(
+    epub: &'a mut EpubBuilder<Z>,
+    img_path: &'a str,
+    img_name: &'a str,
+) -> Result<&'a mut EpubBuilder<Z>, error::Error> {
+    let img_full_path = format!("{}/{}", img_path, img_name);
+    let img = fs::read(&img_full_path).expect("Could not read image");
+    epub.add_resource(
+        format!("image/{}", img_name),
+        img.as_slice(),
+        get_image_mime_type(&img_full_path),
+    )
+    .expect("Could not add image");
     Ok(epub)
 }
 
@@ -644,11 +718,12 @@ fn add_normal_image<'a, Z: Zip>(
     paragraph_number: u16,
 ) -> Result<&'a mut EpubBuilder<Z>, error::Error> {
     let img_content = generate_image_xhtml(epub_plan, img_name);
-    let img = fs::read(format!("{}/{}", img_path, img_name)).expect("Could not read image");
+    let img_full_path = format!("{}/{}", img_path, img_name);
+    let img = fs::read(&img_full_path).expect("Could not read image");
     epub.add_resource(
         format!("image/{}", img_name),
         img.as_slice(),
-        &epub_plan.image_mime_type,
+        get_image_mime_type(&img_full_path),
     )
     .expect("Could not add image");
     epub.add_content(EpubContent::new(
@@ -666,12 +741,12 @@ fn add_colophon_image<'a, Z: Zip>(
     img_name: &'a str,
 ) -> Result<&'a mut EpubBuilder<Z>, error::Error> {
     let img_content = generate_image_xhtml(epub_plan, img_name);
-    let img =
-        fs::read(format!("{}/{}", img_path, img_name)).expect("Could not read colophon image");
+    let img_full_path = format!("{}/{}", img_path, img_name);
+    let img = fs::read(&img_full_path).expect("Could not read image");
     epub.add_resource(
         format!("image/{}", img_name),
         img.as_slice(),
-        &epub_plan.image_mime_type,
+        get_image_mime_type(&img_full_path),
     )
     .expect("Could not add colophon image");
     epub.add_content(
@@ -690,12 +765,12 @@ fn add_preface_image<'a, Z: Zip>(
     preface_number: u16,
 ) -> Result<&'a mut EpubBuilder<Z>, error::Error> {
     let preface_img_content = generate_preface_image_xhtml(epub_plan, img_name);
-    let preface_img =
-        fs::read(format!("{}/{}", img_path, img_name)).expect("Could not read preface page image");
+    let img_full_path = format!("{}/{}", img_path, img_name);
+    let preface_img = fs::read(&img_full_path).expect("Could not read preface page image");
     epub.add_resource(
         format!("image/{}", img_name),
         preface_img.as_slice(),
-        &epub_plan.image_mime_type,
+        get_image_mime_type(&img_full_path),
     )
     .expect("Could not add preface image");
     epub.add_content(
